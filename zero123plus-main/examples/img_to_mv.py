@@ -14,7 +14,8 @@ pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(
 )
 pipeline.to('cuda:0')
 # Run the pipeline
-cond = Image.open(requests.get("https://d.skis.ltd/nrp/sample-data/lysol.png", stream=True).raw)
+# cond = Image.open(requests.get("https://d.skis.ltd/nrp/sample-data/lysol.png", stream=True).raw)
+cond = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/apple.png")
 result = pipeline(cond, num_inference_steps=75).images[0]
 result.show()
 result.save("output.png")
