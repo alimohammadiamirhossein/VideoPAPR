@@ -385,8 +385,10 @@ class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
             cond_lat = cond_lat.view(bs_embed * num_images_per_prompt, *lat_shape)
 
         cak = dict(cond_lat=cond_lat)
+
         if hasattr(self.unet, "controlnet"):
             cak['control_depth'] = depth_image
+
         latents: torch.Tensor = super().__call__(
             None,
             *args,
@@ -399,8 +401,11 @@ class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
             width=width,
             height=height,
             **kwargs
-        ).images
+        )
+
+        latents = latents.images
         latents = unscale_latents(latents)
+
         if not output_type == "latent":
             image = unscale_image(self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0])
         else:
