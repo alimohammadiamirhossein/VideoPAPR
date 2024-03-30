@@ -263,8 +263,10 @@ class SuperNet(torch.nn.Module):
         self._register_state_dict_hook(map_to)
         self._register_load_state_dict_pre_hook(map_from, with_module=True)
 
-
-class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
+from .diffusers_support.pipeline_sd import StableDiffusionPipeline as SDPipeline
+# class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
+## changed this line ##
+class Zero123PlusPipeline(SDPipeline):
     tokenizer: transformers.CLIPTokenizer
     text_encoder: transformers.CLIPTextModel
     vision_encoder: transformers.CLIPVisionModelWithProjection
