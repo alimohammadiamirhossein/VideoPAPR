@@ -14,7 +14,7 @@ image = load_image("https://huggingface.co/datasets/huggingface/documentation-im
 image = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/horese.jpg")
 image = load_image(image)
 image = image.resize((1024, 576))
-print(pipe.unet)
+
 generator = torch.manual_seed(42)
 frames = pipe(image, decode_chunk_size=8, generator=generator).frames[0]
 
