@@ -860,14 +860,18 @@ class StableDiffusionPipeline(
             ip_adapter_image_embeds,
             callback_on_step_end_tensor_inputs,
         )
-
         self._guidance_scale = guidance_scale
+        if guidance_scale > 1.0:
+            do_classifier_free_guidance = True
+        else:
+            do_classifier_free_guidance = False
         self._guidance_rescale = guidance_rescale
         self._clip_skip = clip_skip
         self._cross_attention_kwargs = cross_attention_kwargs
         self._interrupt = False
 
-        # 2. Define call parameters
+
+    # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -887,7 +891,7 @@ class StableDiffusionPipeline(
             prompt,
             device,
             num_images_per_prompt,
-            self.do_classifier_free_guidance,
+            do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
@@ -898,7 +902,7 @@ class StableDiffusionPipeline(
         # For classifier free guidance, we need to do two forward passes.
         # Here we concatenate the unconditional and text embeddings into a single batch
         # to avoid doing two forward passes
-        if self.do_classifier_free_guidance:
+        if do_classifier_free_guidance:
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds])
 
         if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
@@ -907,7 +911,7 @@ class StableDiffusionPipeline(
                 ip_adapter_image_embeds,
                 device,
                 batch_size * num_images_per_prompt,
-                self.do_classifier_free_guidance,
+                do_classifier_free_guidance,
                 )
 
         # 4. Prepare timesteps
@@ -938,7 +942,8 @@ class StableDiffusionPipeline(
 
         # 6.2 Optionally get Guidance Scale Embedding
         timestep_cond = None
-        if self.unet.config.time_cond_proj_dim is not None:
+
+        if "time_cond_proj_dim" in self.unet.config and self.unet.config.time_cond_proj_dim is not None:
             guidance_scale_tensor = torch.tensor(self.guidance_scale - 1).repeat(batch_size * num_images_per_prompt)
             timestep_cond = self.get_guidance_scale_embedding(
                 guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
@@ -953,26 +958,33 @@ class StableDiffusionPipeline(
                     continue
 
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+                latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
+                # noise_pred = self.unet(
+                #     latent_model_input,
+                #     t,
+                #     encoder_hidden_states=prompt_embeds,
+                #     timestep_cond=timestep_cond,
+                #     cross_attention_kwargs=self.cross_attention_kwargs,
+                #     added_cond_kwargs=added_cond_kwargs,
+                #     return_dict=False,
+                # )[0]
+                ## changed this line ##
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    timestep_cond=timestep_cond,
-                    cross_attention_kwargs=self.cross_attention_kwargs,
-                    added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )[0]
 
                 # perform guidance
-                if self.do_classifier_free_guidance:
+                if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-                if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
+                if do_classifier_free_guidance and self.guidance_rescale > 0.0:
                     # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                     noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 

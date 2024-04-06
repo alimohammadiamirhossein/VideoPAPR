@@ -2,8 +2,9 @@ import torch
 import requests
 from PIL import Image
 from diffusers import DiffusionPipeline, EulerAncestralDiscreteScheduler
-from diffusers import StableVideoDiffusionPipeline
-from diffusers_support.pipeline import Zero123PlusPipeline
+# from diffusers import StableVideoDiffusionPipeline
+from diffusers_support.pipeline_zero import Zero123PlusPipeline
+from diffusers_support.pipeline_svd import StableVideoDiffusionPipeline
 
 # Load the pipeline
 pipeline = Zero123PlusPipeline.from_pretrained(
@@ -12,8 +13,11 @@ pipeline = Zero123PlusPipeline.from_pretrained(
 pipe_video = StableVideoDiffusionPipeline.from_pretrained(
     "stabilityai/stable-video-diffusion-img2vid-xt", torch_dtype=torch.float16, variant="fp16"
 )
+pipe_video.enable_model_cpu_offload()
+
 pipeline.unet = pipe_video.unet
-del pipe_video
+# print(pipeline.do_classifier_free_guidance, 1)
+# del pipe_video
 # Feel free to tune the scheduler
 pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(
     pipeline.scheduler.config, timestep_spacing='trailing'
@@ -23,6 +27,9 @@ pipeline.to('cuda:0')
 # cond = Image.open(requests.get("https://d.skis.ltd/nrp/sample-data/lysol.png", stream=True).raw)
 cond = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/apple.png")
 # cond = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/Laptop.jpg")
-result = pipeline(cond, num_inference_steps=75).images[0]
+# result = pipeline(cond, num_inference_steps=75).images[0]
+from diffusers.utils import load_image
+image = load_image("https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/svd/rocket.png")
+frames = pipe_video(image.resize((1024, 576)), decode_chunk_size=8, generator=torch.manual_seed(42)).frames[0]
 # result.show()
 result.save("output.png")
