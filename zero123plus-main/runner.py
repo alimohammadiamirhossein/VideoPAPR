@@ -16,6 +16,11 @@ pipe_video = StableVideoDiffusionPipeline.from_pretrained(
     "stabilityai/stable-video-diffusion-img2vid-xt", torch_dtype=torch.float16, variant="fp16"
 )
 pipe_video.enable_model_cpu_offload()
+
+pipeline.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k = \
+    pipe_video.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k
+
+
 if use_video:
     pipeline.unet = pipe_video.unet
 # print(pipeline.do_classifier_free_guidance, 1)
