@@ -22,7 +22,9 @@ import torch
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 from diffusers.image_processor import PipelineImageInput, VaeImageProcessor
-from diffusers.models import AutoencoderKLTemporalDecoder, UNetSpatioTemporalConditionModel
+from diffusers.models import AutoencoderKLTemporalDecoder#, UNetSpatioTemporalConditionModel
+from .unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
+
 from diffusers.schedulers import EulerDiscreteScheduler
 from diffusers.utils import BaseOutput, logging, replace_example_docstring
 from diffusers.utils.torch_utils import is_compiled_module, randn_tensor
@@ -490,7 +492,6 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
             self.do_classifier_free_guidance,
         )
         added_time_ids = added_time_ids.to(device)
-        print(added_time_ids)
 
         # 6. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
