@@ -28,7 +28,8 @@ from .unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
 from diffusers.schedulers import EulerDiscreteScheduler
 from diffusers.utils import BaseOutput, logging, replace_example_docstring
 from diffusers.utils.torch_utils import is_compiled_module, randn_tensor
-from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+# from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+from .pipeline_utils import DiffusionPipeline
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name

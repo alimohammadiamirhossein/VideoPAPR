@@ -17,12 +17,12 @@ from typing import Any, Dict, Optional
 import torch
 from torch import nn
 
-from ...configuration_utils import ConfigMixin, register_to_config
-from ...utils import BaseOutput
-from ..attention import BasicTransformerBlock, TemporalBasicTransformerBlock
-from ..embeddings import TimestepEmbedding, Timesteps
-from ..modeling_utils import ModelMixin
-from ..resnet import AlphaBlender
+from diffusers.configuration_utils import ConfigMixin, register_to_config
+from diffusers.utils import BaseOutput
+from diffusers.models.attention import BasicTransformerBlock, TemporalBasicTransformerBlock
+from diffusers.models.embeddings import TimestepEmbedding, Timesteps
+from diffusers.models.modeling_utils import ModelMixin
+from diffusers.models.resnet import AlphaBlender
 
 
 @dataclass
@@ -122,6 +122,7 @@ class TransformerTemporalModel(ModelMixin, ConfigMixin):
             self,
             hidden_states: torch.FloatTensor,
             encoder_hidden_states: Optional[torch.LongTensor] = None,
+            encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
             timestep: Optional[torch.LongTensor] = None,
             class_labels: torch.LongTensor = None,
             num_frames: int = 1,
@@ -173,13 +174,22 @@ class TransformerTemporalModel(ModelMixin, ConfigMixin):
 
         # 2. Blocks
         for block in self.transformer_blocks:
-            hidden_states = block(
-                hidden_states,
-                encoder_hidden_states=encoder_hidden_states,
-                timestep=timestep,
-                cross_attention_kwargs=cross_attention_kwargs,
-                class_labels=class_labels,
-            )
+            if encoder_hidden_states_temporal is not None:
+                hidden_states = block(
+                    hidden_states,
+                    encoder_hidden_states=encoder_hidden_states_temporal,
+                    timestep=timestep,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    class_labels=class_labels,
+                )
+            else:
+                hidden_states = block(
+                    hidden_states,
+                    encoder_hidden_states=encoder_hidden_states,
+                    timestep=timestep,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    class_labels=class_labels,
+                )
 
         # 3. Output
         hidden_states = self.proj_out(hidden_states)
@@ -278,6 +288,7 @@ class TransformerSpatioTemporalModel(nn.Module):
             self,
             hidden_states: torch.Tensor,
             encoder_hidden_states: Optional[torch.Tensor] = None,
+            encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
             image_only_indicator: Optional[torch.Tensor] = None,
             return_dict: bool = True,
     ):
@@ -307,7 +318,10 @@ class TransformerSpatioTemporalModel(nn.Module):
         num_frames = image_only_indicator.shape[-1]
         batch_size = batch_frames // num_frames
 
-        time_context = encoder_hidden_states
+        if encoder_hidden_states_temporal is not None:
+            time_context = encoder_hidden_states_temporal
+        else:
+            time_context = encoder_hidden_states
         time_context_first_timestep = time_context[None, :].reshape(
             batch_size, num_frames, -1, time_context.shape[-1]
         )[:, 0]

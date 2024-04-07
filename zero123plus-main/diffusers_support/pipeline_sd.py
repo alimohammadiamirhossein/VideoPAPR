@@ -979,6 +979,7 @@ class StableDiffusionPipeline(
                         t,
                         encoder_hidden_states=prompt_embeds,
                         added_time_ids=added_time_ids,
+                        # encoder_hidden_states_temporal=prompt_embeds[:, 0:1, :],
                         return_dict=False,
                     )[0]
                 else:

@@ -29,11 +29,14 @@ from diffusers.models.resnet import (
 )
 from diffusers.models.transformers.dual_transformer_2d import DualTransformer2DModel
 from diffusers.models.transformers.transformer_2d import Transformer2DModel
-from diffusers.models.transformers.transformer_temporal import (
+# from diffusers.models.transformers.transformer_temporal import (
+#     TransformerSpatioTemporalModel,
+#     TransformerTemporalModel,
+# )
+from .unet_3d_blocks import (
     TransformerSpatioTemporalModel,
     TransformerTemporalModel,
 )
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -2142,6 +2145,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Module):
             hidden_states: torch.FloatTensor,
             temb: Optional[torch.FloatTensor] = None,
             encoder_hidden_states: Optional[torch.FloatTensor] = None,
+            encoder_hidden_states_temporal: Optional[torch.FloatTensor] = None,
             image_only_indicator: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor, ...]]:
         output_states = ()
@@ -2183,6 +2187,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Module):
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                     return_dict=False,
                 )[0]
