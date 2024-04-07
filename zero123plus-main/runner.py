@@ -2,6 +2,7 @@ import torch
 import requests
 from PIL import Image
 from diffusers import DiffusionPipeline, EulerAncestralDiscreteScheduler
+from diffusers.utils import load_image
 # from diffusers import StableVideoDiffusionPipeline
 from diffusers_support.pipeline_zero import Zero123PlusPipeline
 from diffusers_support.pipeline_svd import StableVideoDiffusionPipeline
@@ -27,9 +28,13 @@ pipeline.to('cuda:0')
 # cond = Image.open(requests.get("https://d.skis.ltd/nrp/sample-data/lysol.png", stream=True).raw)
 cond = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/apple.png")
 # cond = Image.open("/localhome/aaa324/Generative Models/VideoPAPR/data/Laptop.jpg")
-# result = pipeline(cond, num_inference_steps=75).images[0]
-from diffusers.utils import load_image
-image = load_image("https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/svd/rocket.png")
-frames = pipe_video(image.resize((1024, 576)), decode_chunk_size=8, generator=torch.manual_seed(42)).frames[0]
-# result.show()
-result.save("output.png")
+result = pipeline(cond, num_inference_steps=75, pipe_svd=pipe_video).images[0]
+if isinstance(result, list):
+    result = result[0]
+result.show()
+# result.save("output.png")
+
+
+# ## video generation ##
+# image = load_image("https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/svd/rocket.png")
+# frames = pipe_video(image.resize((1024, 576)), decode_chunk_size=8, generator=torch.manual_seed(42)).frames[0]

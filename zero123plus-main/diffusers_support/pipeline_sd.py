@@ -949,6 +949,12 @@ class StableDiffusionPipeline(
                 guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
             ).to(device=device, dtype=latents.dtype)
 
+        if "latents_video" in kwargs.keys():
+            latents = kwargs["latents_video"].to(device=device)
+            added_time_ids = kwargs["added_time_ids"]
+            image_latents = kwargs["image_latents"].to(device=device)
+            pipeline_video = kwargs["pipeline_video"]
+
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         self._num_timesteps = len(timesteps)
@@ -961,23 +967,30 @@ class StableDiffusionPipeline(
                 latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+
                 # predict the noise residual
-                # noise_pred = self.unet(
-                #     latent_model_input,
-                #     t,
-                #     encoder_hidden_states=prompt_embeds,
-                #     timestep_cond=timestep_cond,
-                #     cross_attention_kwargs=self.cross_attention_kwargs,
-                #     added_cond_kwargs=added_cond_kwargs,
-                #     return_dict=False,
-                # )[0]
                 ## changed this line ##
-                noise_pred = self.unet(
-                    latent_model_input,
-                    t,
-                    encoder_hidden_states=prompt_embeds,
-                    return_dict=False,
-                )[0]
+                if "latents_video" in kwargs.keys():
+                    # Concatenate image_latents over channels dimension
+                    latent_model_input = torch.cat([latent_model_input, image_latents], dim=2)
+                    prompt_embeds = prompt_embeds[:, 0:1, :]
+                    noise_pred = self.unet(
+                        latent_model_input,
+                        t,
+                        encoder_hidden_states=prompt_embeds,
+                        added_time_ids=added_time_ids,
+                        return_dict=False,
+                    )[0]
+                else:
+                    noise_pred = self.unet(
+                        latent_model_input,
+                        t,
+                        encoder_hidden_states=prompt_embeds,
+                        timestep_cond=timestep_cond,
+                        cross_attention_kwargs=self.cross_attention_kwargs,
+                        added_cond_kwargs=added_cond_kwargs,
+                        return_dict=False,
+                    )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -1009,10 +1022,14 @@ class StableDiffusionPipeline(
                         callback(step_idx, t, latents)
 
         if not output_type == "latent":
-            image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[
-                0
-            ]
-            image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+            if "latents_video" not in kwargs.keys():
+                image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[
+                    0
+                ]
+                image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+            else:
+                decode_chunk_size = None
+                frames = self.decode_latents(latents, latents.shape[1], decode_chunk_size)
         else:
             image = latents
             has_nsfw_concept = None
@@ -1031,3 +1048,4 @@ class StableDiffusionPipeline(
             return (image, has_nsfw_concept)
 
         return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
+

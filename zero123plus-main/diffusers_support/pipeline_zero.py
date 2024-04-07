@@ -25,6 +25,7 @@ from diffusers import (
 from diffusers.image_processor import VaeImageProcessor
 from diffusers.models.attention_processor import Attention, AttnProcessor, XFormersAttnProcessor, AttnProcessor2_0
 from diffusers.utils.import_utils import is_xformers_available
+from diffusers.utils.torch_utils import is_compiled_module, randn_tensor
 
 
 def to_rgb_image(maybe_rgba: Image.Image):
@@ -349,6 +350,7 @@ class Zero123PlusPipeline(SDPipeline):
         image = to_rgb_image(image)
         image_1 = self.feature_extractor_vae(images=image, return_tensors="pt").pixel_values
         image_2 = self.feature_extractor_clip(images=image, return_tensors="pt").pixel_values
+
         if depth_image is not None and hasattr(self.unet, "controlnet"):
             depth_image = to_rgb_image(depth_image)
             depth_image = self.depth_transforms_multi(depth_image).to(
@@ -392,6 +394,67 @@ class Zero123PlusPipeline(SDPipeline):
         if hasattr(self.unet, "controlnet"):
             cak['control_depth'] = depth_image
 
+
+        ## SVD compatible code ##
+        pipe_svd = kwargs.get("pipe_svd", None)
+        fps = 7
+        fps = fps - 1
+        num_frames = 5
+        do_classifier_free_guidance = True
+        noise_aug_strength = 0.02
+        generator = torch.manual_seed(42)
+        image_3 = self.image_processor.preprocess(image_1,
+                                                height=512, width=512).to(self.unet.device) ## to be checked
+        noise = randn_tensor(image_3.shape, generator=generator,
+                             device=self.unet.device, dtype=self.unet.dtype)
+        image_3 = image_3 + noise_aug_strength * noise
+        image_3 = image_3.to(self.unet.device, self.unet.dtype)
+        # image_embeddings = pipe_svd._encode_image(
+        #     image_3,
+        #     self.unet.device,
+        #     1,
+        #     do_classifier_free_guidance
+        # )
+        # print(image_embeddings.shape)
+        image_embeddings = global_embeds
+        image_latents = pipe_svd._encode_vae_image(
+            image_3,
+            device=self.unet.device,
+            num_videos_per_prompt=1,
+            do_classifier_free_guidance=do_classifier_free_guidance,
+        )
+        image_latents = image_latents.to(self.unet.dtype)
+        image_latents = image_latents.unsqueeze(1).repeat(1, num_frames, 1, 1, 1)
+        batch_size = 1
+        motion_bucket_id = 127
+        added_time_ids = pipe_svd._get_add_time_ids(
+            fps,
+            motion_bucket_id,
+            noise_aug_strength,
+            self.unet.dtype,
+            batch_size,
+            1,
+            do_classifier_free_guidance,
+        )
+        added_time_ids = added_time_ids.to(self.unet.device)
+        num_channels_latents = self.unet.config.in_channels
+        latents = None
+        latents = pipe_svd.prepare_latents(
+            batch_size * 1,
+            num_frames,
+            num_channels_latents,
+            512,
+            512,
+            self.unet.dtype,
+            self.unet.device,
+            generator,
+            latents,
+            )
+
+        kwargs["latents_video"] = latents
+        kwargs["added_time_ids"] = added_time_ids.to(self.unet.device)
+        kwargs["image_latents"] = image_latents
+        kwargs["pipeline_video"] = pipe_svd
         latents: torch.Tensor = super().__call__(
             None,
             *args,
@@ -405,16 +468,41 @@ class Zero123PlusPipeline(SDPipeline):
             height=height,
             **kwargs
         )
+        #########################
+
+
+        # latents: torch.Tensor = super().__call__(
+        #     None,
+        #     *args,
+        #     cross_attention_kwargs=cak,
+        #     guidance_scale=guidance_scale,
+        #     num_images_per_prompt=num_images_per_prompt,
+        #     prompt_embeds=encoder_hidden_states,
+        #     num_inference_steps=num_inference_steps,
+        #     output_type='latent',
+        #     width=width,
+        #     height=height,
+        #     **kwargs
+        # )
 
         latents = latents.images
         latents = unscale_latents(latents)
 
         if not output_type == "latent":
-            image = unscale_image(self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0])
+            if len(latents.shape) == 4:
+                image = unscale_image(self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0])
+            else:
+                decode_chunk_size = 1
+                image = pipe_svd.decode_latents(latents, latents.shape[1], decode_chunk_size)
         else:
             image = latents
-
-        image = self.image_processor.postprocess(image, output_type=output_type)
+        if len(image.shape) == 4:
+            image = self.image_processor.postprocess(image, output_type=output_type)
+        else:
+            video = []
+            for i in range(image.shape[2]):
+                video.append(self.image_processor.postprocess(image[:, :, i, :, :], output_type=output_type))
+            image = video
         if not return_dict:
             return (image,)
 

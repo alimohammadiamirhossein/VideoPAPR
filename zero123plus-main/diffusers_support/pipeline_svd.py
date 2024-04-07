@@ -531,6 +531,7 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
                 latent_model_input = torch.cat([latent_model_input, image_latents], dim=2)
 
                 # predict the noise residual
+                print("latent_model_input", latent_model_input.shape, added_time_ids.shape, image_embeddings.shape)
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
