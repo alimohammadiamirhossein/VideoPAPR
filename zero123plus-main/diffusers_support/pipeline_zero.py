@@ -383,6 +383,7 @@ class Zero123PlusPipeline(SDPipeline):
         ramp = global_embeds.new_tensor(self.config.ramping_coefficients).unsqueeze(-1)
         encoder_hidden_states = encoder_hidden_states + global_embeds * ramp
 
+
         if num_images_per_prompt > 1:
             bs_embed, *lat_shape = cond_lat.shape
             assert len(lat_shape) == 3
