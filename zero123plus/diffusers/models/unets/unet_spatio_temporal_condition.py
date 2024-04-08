@@ -359,6 +359,7 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
         timestep: Union[torch.Tensor, float, int],
         encoder_hidden_states: torch.Tensor,
         added_time_ids: torch.Tensor,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         return_dict: bool = True,
     ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
         r"""
@@ -435,6 +436,7 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
                     hidden_states=sample,
                     temb=emb,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                 )
             else:
@@ -451,6 +453,7 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
             hidden_states=sample,
             temb=emb,
             encoder_hidden_states=encoder_hidden_states,
+            encoder_hidden_states_temporal=encoder_hidden_states_temporal,
             image_only_indicator=image_only_indicator,
         )
 
@@ -465,6 +468,7 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
                     temb=emb,
                     res_hidden_states_tuple=res_samples,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                 )
             else:
