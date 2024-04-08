@@ -34,9 +34,12 @@ def load_pipeline_zero123(use_video=True):
     return pipe_zero123, pipe_svd
 
 
+use_video = True
 pipe_zero123, pipe_svd = load_pipeline_zero123()
 cond = load_image("/localhome/aaa324/Generative Models/VideoPAPR/data/apple.png")
-result = pipe_zero123(cond, num_inference_steps=75, pipe_svd=pipe_svd, use_video=True).images[0]
-
+result = pipe_zero123(cond, num_inference_steps=75, pipe_svd=pipe_svd, use_video=use_video).images[0]
+if isinstance(result, list):
+    result = result[0]
+result.show()
 
 
