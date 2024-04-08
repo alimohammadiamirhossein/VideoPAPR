@@ -6,6 +6,7 @@ from diffusers.utils import load_image
 # from diffusers import StableVideoDiffusionPipeline
 from diffusers_support.pipeline_zero import Zero123PlusPipeline
 from diffusers_support.pipeline_svd import StableVideoDiffusionPipeline
+from util.transfer_weights import transfer_weights
 
 # Load the pipeline
 use_video = True
@@ -17,8 +18,9 @@ pipe_video = StableVideoDiffusionPipeline.from_pretrained(
 )
 pipe_video.enable_model_cpu_offload()
 
-pipeline.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k = \
-    pipe_video.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k
+transfer_weights(pipeline, pipe_video)
+# pipeline.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k = \
+#     pipe_video.unet.up_blocks[1].attentions[0].transformer_blocks[0].attn1.to_k
 
 
 if use_video:
