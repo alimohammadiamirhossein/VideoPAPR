@@ -960,6 +960,7 @@ class StableDiffusionPipeline(
             latents = kwargs["latents_video"].to(device=device)
             added_time_ids = kwargs["added_time_ids"]
             image_latents = kwargs["image_latents"].to(device=device)
+            image_embeddings = kwargs["image_embeddings"].to(device=device)
 
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
@@ -978,13 +979,13 @@ class StableDiffusionPipeline(
                 if "latents_video" in kwargs.keys():
                     # Concatenate image_latents over channels dimension
                     latent_model_input = torch.cat([latent_model_input, image_latents], dim=2)
-                    prompt_embeds = prompt_embeds[:, 0:1, :]
+                    # prompt_embeds = prompt_embeds[:, 0:1, :]
                     noise_pred = self.unet(
                         latent_model_input,
                         t,
                         encoder_hidden_states=prompt_embeds,
                         added_time_ids=added_time_ids,
-                        # encoder_hidden_states_temporal=prompt_embeds[:, 0:1, :],
+                        encoder_hidden_states_temporal=image_embeddings,
                         return_dict=False,
                     )[0]
                 else:

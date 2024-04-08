@@ -534,6 +534,10 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             # )
             # print(image_embeddings.shape)
             image_embeddings = global_embeds
+            if do_classifier_free_guidance:
+                negative_image_embeddings = torch.zeros_like(image_embeddings)
+            image_embeddings = torch.cat([negative_image_embeddings, image_embeddings])
+
             image_latents = self._encode_vae_image(
                 image_3,
                 device=self.unet.device,
@@ -571,6 +575,7 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             kwargs["latents_video"] = latents
             kwargs["added_time_ids"] = added_time_ids.to(self.unet.device)
             kwargs["image_latents"] = image_latents
+            kwargs["image_embeddings"] = image_embeddings
             latents: torch.Tensor = super().__call__(
                 None,
                 *args,

@@ -1980,6 +1980,7 @@ class UNetMidBlockSpatioTemporal(nn.Module):
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                     return_dict=False,
                 )[0]
@@ -2190,6 +2191,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Module):
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                     return_dict=False,
                 )[0]
@@ -2402,6 +2404,7 @@ class CrossAttnUpBlockSpatioTemporal(nn.Module):
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states_temporal=encoder_hidden_states_temporal,
                     image_only_indicator=image_only_indicator,
                     return_dict=False,
                 )[0]
