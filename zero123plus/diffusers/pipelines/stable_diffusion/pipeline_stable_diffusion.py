@@ -960,7 +960,6 @@ class StableDiffusionPipeline(
             latents = kwargs["latents_video"].to(device=device)
             added_time_ids = kwargs["added_time_ids"]
             image_latents = kwargs["image_latents"].to(device=device)
-            pipeline_video = kwargs["pipeline_video"]
 
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order

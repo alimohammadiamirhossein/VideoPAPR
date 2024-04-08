@@ -545,6 +545,7 @@ class CrossAttnDownBlock3D(nn.Module):
         hidden_states: torch.FloatTensor,
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         num_frames: int = 1,
         cross_attention_kwargs: Dict[str, Any] = None,
@@ -771,6 +772,7 @@ class CrossAttnUpBlock3D(nn.Module):
         res_hidden_states_tuple: Tuple[torch.FloatTensor, ...],
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         upsample_size: Optional[int] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         num_frames: int = 1,
@@ -1175,6 +1177,7 @@ class CrossAttnDownBlockMotion(nn.Module):
         hidden_states: torch.FloatTensor,
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         num_frames: int = 1,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
@@ -1359,6 +1362,7 @@ class CrossAttnUpBlockMotion(nn.Module):
         res_hidden_states_tuple: Tuple[torch.FloatTensor, ...],
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         upsample_size: Optional[int] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
@@ -1700,6 +1704,7 @@ class UNetMidBlockCrossAttnMotion(nn.Module):
         hidden_states: torch.FloatTensor,
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
@@ -1936,6 +1941,7 @@ class UNetMidBlockSpatioTemporal(nn.Module):
         hidden_states: torch.FloatTensor,
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         image_only_indicator: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         hidden_states = self.resnets[0](
@@ -2142,6 +2148,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Module):
         hidden_states: torch.FloatTensor,
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         image_only_indicator: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor, ...]]:
         output_states = ()
@@ -2351,6 +2358,7 @@ class CrossAttnUpBlockSpatioTemporal(nn.Module):
         res_hidden_states_tuple: Tuple[torch.FloatTensor, ...],
         temb: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states_temporal: Optional[torch.Tensor] = None,
         image_only_indicator: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         for resnet, attn in zip(self.resnets, self.attentions):

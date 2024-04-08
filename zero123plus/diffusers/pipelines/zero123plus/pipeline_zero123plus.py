@@ -4,6 +4,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 
 import numpy
 import torch
+import inspect
 import torch.nn as nn
 import torch.utils.checkpoint
 import torch.distributed
@@ -11,6 +12,7 @@ import transformers
 from collections import OrderedDict
 from PIL import Image
 from torchvision import transforms
+from typing import Callable, Dict, List, Optional, Union
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from ... import (
@@ -326,6 +328,120 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
         image = self.vae.encode(image).latent_dist.sample()
         return image
 
+    def _get_add_time_ids(
+            self,
+            fps: int,
+            motion_bucket_id: int,
+            noise_aug_strength: float,
+            dtype: torch.dtype,
+            batch_size: int,
+            num_videos_per_prompt: int,
+            do_classifier_free_guidance: bool,
+    ):
+        add_time_ids = [fps, motion_bucket_id, noise_aug_strength]
+
+        passed_add_embed_dim = self.unet.config.addition_time_embed_dim * len(add_time_ids)
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+
+        if expected_add_embed_dim != passed_add_embed_dim:
+            raise ValueError(
+                f"Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`."
+            )
+
+        add_time_ids = torch.tensor([add_time_ids], dtype=dtype)
+        add_time_ids = add_time_ids.repeat(batch_size * num_videos_per_prompt, 1)
+
+        if do_classifier_free_guidance:
+            add_time_ids = torch.cat([add_time_ids, add_time_ids])
+
+        return add_time_ids
+
+    def prepare_latents_video(
+            self,
+            batch_size: int,
+            num_frames: int,
+            num_channels_latents: int,
+            height: int,
+            width: int,
+            dtype: torch.dtype,
+            device: Union[str, torch.device],
+            generator: torch.Generator,
+            latents: Optional[torch.FloatTensor] = None,
+    ):
+        shape = (
+            batch_size,
+            num_frames,
+            num_channels_latents // 2,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
+        )
+        if isinstance(generator, list) and len(generator) != batch_size:
+            raise ValueError(
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
+            )
+
+        if latents is None:
+            latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+        else:
+            latents = latents.to(device)
+
+        # scale the initial noise by the standard deviation required by the scheduler
+        latents = latents * self.scheduler.init_noise_sigma
+        return latents
+
+    def _encode_vae_image(
+                self,
+                image: torch.Tensor,
+                device: Union[str, torch.device],
+                num_videos_per_prompt: int,
+                do_classifier_free_guidance: bool,
+        ):
+            image = image.to(device=device)
+            image_latents = self.vae.encode(image).latent_dist.mode()
+
+            if do_classifier_free_guidance:
+                negative_image_latents = torch.zeros_like(image_latents)
+
+                # For classifier free guidance, we need to do two forward passes.
+                # Here we concatenate the unconditional and text embeddings into a single batch
+                # to avoid doing two forward passes
+                image_latents = torch.cat([negative_image_latents, image_latents])
+
+            # duplicate image_latents for each generation per prompt, using mps friendly method
+            image_latents = image_latents.repeat(num_videos_per_prompt, 1, 1, 1)
+
+            return image_latents
+
+    def decode_video_latents(self, latents: torch.FloatTensor, num_frames: int, decode_chunk_size: int = 14):
+        # [batch, frames, channels, height, width] -> [batch*frames, channels, height, width]
+        latents = latents.flatten(0, 1)
+
+        latents = 1 / self.vae.config.scaling_factor * latents
+
+        forward_vae_fn = self.vae._orig_mod.forward if is_compiled_module(self.vae) else self.vae.forward
+        accepts_num_frames = "num_frames" in set(inspect.signature(forward_vae_fn).parameters.keys())
+
+        # decode decode_chunk_size frames at a time to avoid OOM
+        frames = []
+        for i in range(0, latents.shape[0], decode_chunk_size):
+            num_frames_in = latents[i : i + decode_chunk_size].shape[0]
+            decode_kwargs = {}
+            if accepts_num_frames:
+                # we only pass num_frames_in if it's expected
+                decode_kwargs["num_frames"] = num_frames_in
+
+            frame = self.vae.decode(latents[i : i + decode_chunk_size], **decode_kwargs).sample
+            frames.append(frame)
+        frames = torch.cat(frames, dim=0)
+
+        # [batch*frames, channels, height, width] -> [batch, channels, frames, height, width]
+        frames = frames.reshape(-1, num_frames, *frames.shape[1:]).permute(0, 2, 1, 3, 4)
+
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
+        frames = frames.float()
+        return frames
+
     @torch.no_grad()
     def __call__(
             self,
@@ -398,7 +514,6 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
         use_video = kwargs["use_video"]
         # ## SVD compatible code ##
         if use_video:
-            pipe_svd = kwargs.get("pipe_svd", None)
             fps = 7
             fps = fps - 1
             num_frames = 5
@@ -419,7 +534,7 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             # )
             # print(image_embeddings.shape)
             image_embeddings = global_embeds
-            image_latents = pipe_svd._encode_vae_image(
+            image_latents = self._encode_vae_image(
                 image_3,
                 device=self.unet.device,
                 num_videos_per_prompt=1,
@@ -429,7 +544,7 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             image_latents = image_latents.unsqueeze(1).repeat(1, num_frames, 1, 1, 1)
             batch_size = 1
             motion_bucket_id = 127
-            added_time_ids = pipe_svd._get_add_time_ids(
+            added_time_ids = self._get_add_time_ids(
                 fps,
                 motion_bucket_id,
                 noise_aug_strength,
@@ -441,7 +556,7 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             added_time_ids = added_time_ids.to(self.unet.device)
             num_channels_latents = self.unet.config.in_channels
             latents = None
-            latents = pipe_svd.prepare_latents(
+            latents = self.prepare_latents_video(
                 batch_size * 1,
                 num_frames,
                 num_channels_latents,
@@ -456,7 +571,6 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             kwargs["latents_video"] = latents
             kwargs["added_time_ids"] = added_time_ids.to(self.unet.device)
             kwargs["image_latents"] = image_latents
-            kwargs["pipeline_video"] = pipe_svd
             latents: torch.Tensor = super().__call__(
                 None,
                 *args,
@@ -494,7 +608,7 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
                 image = unscale_image(self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0])
             else:
                 decode_chunk_size = 1
-                image = pipe_svd.decode_latents(latents, latents.shape[1], decode_chunk_size)
+                image = self.decode_video_latents(latents, latents.shape[1], decode_chunk_size)
         else:
             image = latents
         if len(image.shape) == 4:
