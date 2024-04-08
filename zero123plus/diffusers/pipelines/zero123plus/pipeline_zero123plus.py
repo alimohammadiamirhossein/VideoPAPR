@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
-from diffusers.models import AutoencoderKL, UNet2DConditionModel
-from diffusers.schedulers import KarrasDiffusionSchedulers
+from ...models import AutoencoderKL, UNet2DConditionModel
+from ...schedulers import KarrasDiffusionSchedulers
 
 import numpy
 import torch
@@ -13,19 +13,21 @@ from PIL import Image
 from torchvision import transforms
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
-import diffusers
-from diffusers import (
+from ... import (
     AutoencoderKL,
     DDPMScheduler,
     DiffusionPipeline,
     EulerAncestralDiscreteScheduler,
     UNet2DConditionModel,
-    ImagePipelineOutput
+    ImagePipelineOutput,
+    ControlNetModel,
+    StableDiffusionPipeline,
+
 )
-from diffusers.image_processor import VaeImageProcessor
-from diffusers.models.attention_processor import Attention, AttnProcessor, XFormersAttnProcessor, AttnProcessor2_0
-from diffusers.utils.import_utils import is_xformers_available
-from diffusers.utils.torch_utils import is_compiled_module, randn_tensor
+from ...image_processor import VaeImageProcessor
+from ...models.attention_processor import Attention, AttnProcessor, XFormersAttnProcessor, AttnProcessor2_0
+from ...utils.import_utils import is_xformers_available
+from ...utils.torch_utils import is_compiled_module, randn_tensor
 
 
 def to_rgb_image(maybe_rgba: Image.Image):
@@ -175,11 +177,11 @@ def unscale_image(image):
 
 
 class DepthControlUNet(torch.nn.Module):
-    def __init__(self, unet: RefOnlyNoisedUNet, controlnet: Optional[diffusers.ControlNetModel] = None, conditioning_scale=1.0) -> None:
+    def __init__(self, unet: RefOnlyNoisedUNet, controlnet: Optional[ControlNetModel] = None, conditioning_scale=1.0) -> None:
         super().__init__()
         self.unet = unet
         if controlnet is None:
-            self.controlnet = diffusers.ControlNetModel.from_unet(unet.unet)
+            self.controlnet = ControlNetModel.from_unet(unet.unet)
         else:
             self.controlnet = controlnet
         DefaultAttnProc = AttnProcessor2_0
@@ -265,14 +267,14 @@ class SuperNet(torch.nn.Module):
         self._register_load_state_dict_pre_hook(map_from, with_module=True)
 
 
-class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
+class Zero123PlusPipeline(StableDiffusionPipeline):
     tokenizer: transformers.CLIPTokenizer
     text_encoder: transformers.CLIPTextModel
     vision_encoder: transformers.CLIPVisionModelWithProjection
 
     feature_extractor_clip: transformers.CLIPImageProcessor
     unet: UNet2DConditionModel
-    scheduler: diffusers.schedulers.KarrasDiffusionSchedulers
+    scheduler: KarrasDiffusionSchedulers
 
     vae: AutoencoderKL
     ramping: nn.Linear
@@ -315,7 +317,7 @@ class Zero123PlusPipeline(diffusers.StableDiffusionPipeline):
         if isinstance(self.unet, UNet2DConditionModel):
             self.unet = RefOnlyNoisedUNet(self.unet, train_sched, self.scheduler).eval()
 
-    def add_controlnet(self, controlnet: Optional[diffusers.ControlNetModel] = None, conditioning_scale=1.0):
+    def add_controlnet(self, controlnet: Optional[ControlNetModel] = None, conditioning_scale=1.0):
         self.prepare()
         self.unet = DepthControlUNet(self.unet, controlnet, conditioning_scale)
         return SuperNet(OrderedDict([('controlnet', self.unet.controlnet)]))
