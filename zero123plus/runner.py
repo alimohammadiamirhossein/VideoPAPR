@@ -1,0 +1,1 @@
+from diffusers import Zero123PlusPipeline
