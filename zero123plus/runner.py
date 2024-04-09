@@ -8,6 +8,7 @@ from diffusers import (
     DiffusionPipeline,
     EulerAncestralDiscreteScheduler,
 )
+from util.weight_transfer import transfer_unets
 
 
 def load_image(path):
@@ -24,6 +25,7 @@ def load_pipeline_zero123(use_video=True):
         "stabilityai/stable-video-diffusion-img2vid-xt", torch_dtype=torch.float16, variant="fp16"
     )
     pipe_svd.enable_model_cpu_offload()
+    pipe_zero123, pipe_svd = transfer_unets(pipe_zero123, pipe_svd)
     if use_video:
         pipe_zero123.unet = pipe_svd.unet
     pipe_zero123.scheduler = EulerAncestralDiscreteScheduler.from_config(
