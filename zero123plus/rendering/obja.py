@@ -33,10 +33,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--object_path",
     type=str,
-    default="/localhome/aaa324/Project/ButterflyExample/Blender/source/butterfly.glb",
+    default="/localhome/aaa324/Generative Models/Examples/animated_eagle.glb",
     help="Path to the object file",
 )
-parser.add_argument("--output_dir", type=str, default="/localhome/aaa324/Project/ButterflyExample/Blender")
+parser.add_argument("--output_dir", type=str, default="/localhome/aaa324/Generative Models/Examples")
 parser.add_argument(
     "--engine", type=str, default="BLENDER_EEVEE", choices=["CYCLES", "BLENDER_EEVEE"]
 )
@@ -87,11 +87,13 @@ def add_lighting() -> None:
     # add a new light
     bpy.ops.object.light_add(type="AREA")
     light2 = bpy.data.lights["Area"]
-    light2.energy = 30
+    light2.energy = 3000
     bpy.data.objects["Area"].location[2] = 0.5
-    bpy.data.objects["Area"].scale[0] = 100
-    bpy.data.objects["Area"].scale[1] = 100
-    bpy.data.objects["Area"].scale[2] = 100
+    bpy.data.objects["Area"].scale[0] = 50
+    bpy.data.objects["Area"].scale[1] = 50
+    bpy.data.objects["Area"].scale[2] = 50
+
+
 
 
 def reset_scene() -> None:
@@ -195,7 +197,7 @@ def save_images(object_file: str) -> None:
     zenith_angles = [0, 30, 30, 30, -20, -20, -20]
 
     num_frames = args.num_images
-    for frame in range(0, 41, 5):
+    for frame in range(0, 60, 1):
         # Set the frame
         scene.frame_set(frame)
 
@@ -203,7 +205,7 @@ def save_images(object_file: str) -> None:
         for i in range(len(azimuth_angles)):
             # set the camera position
             theta = math.radians(azimuth_angles[i]+270)
-            phi = math.radians(zenith_angles[i]+270)
+            phi = math.radians(-1*zenith_angles[i]+90)
             point = (
                 args.camera_dist * math.sin(phi) * math.cos(theta),
                 args.camera_dist * math.sin(phi) * math.sin(theta),
@@ -287,6 +289,7 @@ def concatenate_images(frames_dictionary, frame_number):
     bottom_row = cv2.hconcat([images[3], images[6]])
     concatenated_image = cv2.vconcat([top_row, middle_row, bottom_row])
     input_image = images[0]
+    concatenated_image = cv2.resize(concatenated_image, (input_image.shape[1], input_image.shape[0]))
     gt_image = concatenated_image
 
     return input_image, gt_image
