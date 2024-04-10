@@ -821,13 +821,6 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
                                      device=self.unet.device, dtype=self.unet.dtype)
                 image_3 = image_3 + noise_aug_strength * noise
                 image_3 = image_3.to(self.unet.device, self.unet.dtype)
-                # image_embeddings = pipe_svd._encode_image(
-                #     image_3,
-                #     self.unet.device,
-                #     1,
-                #     do_classifier_free_guidance
-                # )
-                # print(image_embeddings.shape)
                 image_embeddings = global_embeds
                 if do_classifier_free_guidance:
                     negative_image_embeddings = torch.zeros_like(image_embeddings)
