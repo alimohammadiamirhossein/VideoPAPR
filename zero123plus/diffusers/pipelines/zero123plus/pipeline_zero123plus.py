@@ -905,3 +905,9 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
                         loss = criterion(latents, gts)
                         loss.backward()
                         self.optimizer.step()
+
+
+        network.save_weights(
+            f"./lora_weights.pt",
+            dtype=torch.float32,
+            )
