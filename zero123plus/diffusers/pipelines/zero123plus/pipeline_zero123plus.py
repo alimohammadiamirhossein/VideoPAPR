@@ -8,12 +8,16 @@ import inspect
 import torch.nn as nn
 import torch.utils.checkpoint
 import torch.distributed
+import torch.optim as optim
 import transformers
 from collections import OrderedDict
 from PIL import Image
 from torchvision import transforms
+from torch.utils.data import DataLoader
 from typing import Callable, Dict, List, Optional, Union
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from torchvision import transforms
+from PIL import Image
 
 from ... import (
     AutoencoderKL,
@@ -30,6 +34,8 @@ from ...image_processor import VaeImageProcessor
 from ...models.attention_processor import Attention, AttnProcessor, XFormersAttnProcessor, AttnProcessor2_0
 from ...utils.import_utils import is_xformers_available
 from ...utils.torch_utils import is_compiled_module, randn_tensor
+from ...utils.lora import LoRANetwork, DEFAULT_TARGET_REPLACE, UNET_TARGET_REPLACE_MODULE_CONV
+import random
 
 
 def to_rgb_image(maybe_rgba: Image.Image):
@@ -327,6 +333,47 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
     def encode_condition_image(self, image: torch.Tensor):
         image = self.vae.encode(image).latent_dist.sample()
         return image
+
+    def get_optimizer(self, name: str):
+        name = name.lower()
+        if name.startswith("dadapt"):
+            import dadaptation
+
+            if name == "dadaptadam":
+                return dadaptation.DAdaptAdam
+            elif name == "dadaptlion":
+                return dadaptation.DAdaptLion
+            else:
+                raise ValueError("DAdapt optimizer must be dadaptadam or dadaptlion")
+
+        elif name.endswith("8bit"):  # 検証してない
+            import bitsandbytes as bnb
+
+            if name == "adam8bit":
+                return bnb.optim.Adam8bit
+            elif name == "lion8bit":
+                return bnb.optim.Lion8bit
+            else:
+                raise ValueError("8bit optimizer must be adam8bit or lion8bit")
+
+        else:
+            if name == "adam":
+                return torch.optim.Adam
+            elif name == "adamw":
+                return torch.optim.AdamW
+
+                return Lion
+            elif name == "prodigy":
+                import prodigyopt
+
+                return prodigyopt.Prodigy
+            else:
+                raise ValueError("Optimizer must be adam, adamw, lion or Prodigy")
+
+    def configure_optimizers(self, network, train_lr=0.1, optimizer_name="adamw", **optimizer_kwargs):
+        optimizer_module = self.get_optimizer(optimizer_name)
+        self.optimizer = optimizer_module(network.prepare_optimizer_params(), lr=train_lr, **optimizer_kwargs)
+
 
     def _get_add_time_ids(
             self,
@@ -627,3 +674,234 @@ class Zero123PlusPipeline(StableDiffusionPipeline):
             return (image,)
 
         return ImagePipelineOutput(images=image)
+
+    def predict_noise(
+            self,
+            timestep: int,
+            latents: torch.FloatTensor,
+            image_latents: torch.FloatTensor,
+            prompt_embeds: torch.FloatTensor,
+            added_time_ids: torch.FloatTensor,
+            image_embeddings: torch.FloatTensor,
+            guidance_scale=7.5,
+    ) -> torch.FloatTensor:
+        # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+        do_classifier_free_guidance = True if guidance_scale > 1 else False
+        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+        latent_model_input = torch.cat([latent_model_input, image_latents], dim=2)
+        latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
+
+        # predict the noise residual
+        noise_pred = self.unet(
+            latent_model_input,
+            timestep,
+            encoder_hidden_states=prompt_embeds,
+            added_time_ids=added_time_ids,
+            encoder_hidden_states_temporal=image_embeddings,
+            return_dict=False,
+        )[0]
+
+        # perform guidance
+        if do_classifier_free_guidance:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            guided_target = noise_pred_uncond + guidance_scale * (
+                    noise_pred_text - noise_pred_uncond
+            )
+        else:
+            guided_target = noise_pred
+
+        return guided_target
+
+    def training_step(
+            self,
+            image: Image.Image = None,
+            dataloader: DataLoader = None,
+            prompt = "",
+            *args,
+            num_images_per_prompt: Optional[int] = 1,
+            guidance_scale=4.0,
+            depth_image: Image.Image = None,
+            output_type: Optional[str] = "pil",
+            width=640,
+            height=960,
+            num_inference_steps=28,
+            return_dict=True,
+            **kwargs
+    ):
+        training_method = kwargs.get("training_method", "innoxattn")
+
+        network = LoRANetwork(
+            self.unet,
+            rank=4,
+            multiplier=1.0,
+            alpha=1.0,
+            train_method=training_method,
+        ).to(self.unet.device, dtype=self.unet.dtype)
+        train_lr = kwargs.get("train_lr", 1e-4)
+        self.configure_optimizers(network, train_lr=train_lr)
+
+        self.prepare()
+
+        criterion = nn.MSELoss()
+
+        for batch in dataloader:
+            input_image, gt = batch
+            gt = gt.to(self.unet.device, dtype=self.unet.dtype)
+            inp = input_image[0, 0]
+            image = transforms.ToPILImage()(inp)
+            gts = []
+            for i in range(gt.shape[1]):
+                image_latents = self.vae.encode(gt[0:1, i]).latent_dist.mode()
+                gts.append(image_latents)
+            gts = torch.stack(gts, dim=1)
+
+            if image is None:
+                raise ValueError("Inputting embeddings not supported for this pipeline. Please pass an image.")
+            assert not isinstance(image, torch.Tensor)
+            image = to_rgb_image(image)
+            image_1 = self.feature_extractor_vae(images=image, return_tensors="pt").pixel_values
+            image_2 = self.feature_extractor_clip(images=image, return_tensors="pt").pixel_values
+
+            if depth_image is not None and hasattr(self.unet, "controlnet"):
+                depth_image = to_rgb_image(depth_image)
+                depth_image = self.depth_transforms_multi(depth_image).to(
+                    device=self.unet.controlnet.device, dtype=self.unet.controlnet.dtype
+                )
+            image = image_1.to(device=self.vae.device, dtype=self.vae.dtype)
+            image_2 = image_2.to(device=self.vae.device, dtype=self.vae.dtype)
+            cond_lat = self.encode_condition_image(image)
+            if guidance_scale > 1:
+                negative_lat = self.encode_condition_image(torch.zeros_like(image))
+                cond_lat = torch.cat([negative_lat, cond_lat])
+
+            encoded = self.vision_encoder(image_2, output_hidden_states=False)
+            global_embeds = encoded.image_embeds
+            global_embeds = global_embeds.unsqueeze(-2)
+
+            if hasattr(self, "encode_prompt"):
+                encoder_hidden_states = self.encode_prompt(
+                    prompt,
+                    self.device,
+                    1,
+                    False
+                )[0]
+            else:
+                encoder_hidden_states = self._encode_prompt(
+                    prompt,
+                    self.device,
+                    1,
+                    False
+                )
+            ramp = global_embeds.new_tensor(self.config.ramping_coefficients).unsqueeze(-1)
+            encoder_hidden_states = encoder_hidden_states + global_embeds * ramp
+
+            if num_images_per_prompt > 1:
+                bs_embed, *lat_shape = cond_lat.shape
+                assert len(lat_shape) == 3
+                cond_lat = cond_lat.repeat(1, num_images_per_prompt, 1, 1)
+                cond_lat = cond_lat.view(bs_embed * num_images_per_prompt, *lat_shape)
+
+            cak = dict(cond_lat=cond_lat)
+
+            if hasattr(self.unet, "controlnet"):
+                cak['control_depth'] = depth_image
+
+            use_video = kwargs["use_video"]
+            # ## SVD compatible code ##
+            if use_video:
+                fps = 7
+                fps = fps - 1
+                num_frames = 5
+                do_classifier_free_guidance = True
+                noise_aug_strength = 0.02
+                generator = torch.manual_seed(42)
+                image_3 = self.image_processor.preprocess(image_1,
+                                                          height=512, width=512).to(self.unet.device) ## to be checked
+                noise = randn_tensor(image_3.shape, generator=generator,
+                                     device=self.unet.device, dtype=self.unet.dtype)
+                image_3 = image_3 + noise_aug_strength * noise
+                image_3 = image_3.to(self.unet.device, self.unet.dtype)
+                # image_embeddings = pipe_svd._encode_image(
+                #     image_3,
+                #     self.unet.device,
+                #     1,
+                #     do_classifier_free_guidance
+                # )
+                # print(image_embeddings.shape)
+                image_embeddings = global_embeds
+                if do_classifier_free_guidance:
+                    negative_image_embeddings = torch.zeros_like(image_embeddings)
+                image_embeddings = torch.cat([negative_image_embeddings, image_embeddings])
+
+                image_latents = self._encode_vae_image(
+                    image_3,
+                    device=self.unet.device,
+                    num_videos_per_prompt=1,
+                    do_classifier_free_guidance=do_classifier_free_guidance,
+                )
+                image_latents = image_latents.to(self.unet.dtype)
+                image_latents = image_latents.unsqueeze(1).repeat(1, num_frames, 1, 1, 1)
+                batch_size = 1
+                motion_bucket_id = 127
+                added_time_ids = self._get_add_time_ids(
+                    fps,
+                    motion_bucket_id,
+                    noise_aug_strength,
+                    self.unet.dtype,
+                    batch_size,
+                    1,
+                    do_classifier_free_guidance,
+                )
+                added_time_ids = added_time_ids.to(self.unet.device)
+                num_channels_latents = self.unet.config.in_channels
+                latents = None
+                latents = self.prepare_latents_video(
+                    batch_size * 1,
+                    num_frames,
+                    num_channels_latents,
+                    512,
+                    512,
+                    self.unet.dtype,
+                    self.unet.device,
+                    generator,
+                    latents,
+                    )
+
+                # 3. Encode input prompt
+                cross_attention_kwargs = None
+                lora_scale = (
+                    self.cross_attention_kwargs.get("scale", None) if cross_attention_kwargs is not None else None
+                )
+                prompt_embeds, negative_prompt_embeds = self.encode_prompt(
+                    None,
+                    self.unet.device,
+                    num_images_per_prompt,
+                    do_classifier_free_guidance,
+                    None,
+                    prompt_embeds=encoder_hidden_states,
+                    negative_prompt_embeds=None,
+                    lora_scale=lora_scale,
+                )
+
+                if do_classifier_free_guidance:
+                    prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds])
+
+                t = random.choice(self.scheduler.timesteps)
+
+                # with torch.set_grad_enabled(True):
+                with torch.no_grad():
+                    self.optimizer.zero_grad()
+                    with network:
+                        noise_pred = self.predict_noise(
+                            t,
+                            latents,
+                            image_latents,
+                            prompt_embeds=prompt_embeds,
+                            added_time_ids=added_time_ids,
+                            image_embeddings=image_embeddings,
+                            guidance_scale=guidance_scale,
+                        )
+                        latents = self.scheduler.step(noise_pred, t, latents).pred_original_sample
+                        loss = criterion(latents, gts)
+                        loss.backward()
+                        self.optimizer.step()

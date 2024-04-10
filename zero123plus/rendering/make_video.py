@@ -25,7 +25,7 @@ def create_video(image_directory, output_path, type='input', frame_rate=30):
     video_writer.release()
 
 # Usage example
-image_directory = "/localhome/aaa324/Generative Models/Examples/animated_eagle"
+image_directory = "/localhome/aaa324/Generative Models/Examples/snoopy"
 for ftype in ['input', 'gt']:
     output_path = os.path.join(image_directory, f"{ftype}_video.mp4")
     create_video(image_directory, output_path, type=ftype)

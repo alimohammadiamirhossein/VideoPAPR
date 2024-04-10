@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--object_path",
     type=str,
-    default="/localhome/aaa324/Generative Models/Examples/animated_eagle.glb",
+    default="/localhome/aaa324/Generative Models/Examples/snoopy.glb",
     help="Path to the object file",
 )
 parser.add_argument("--output_dir", type=str, default="/localhome/aaa324/Generative Models/Examples")
@@ -204,7 +204,7 @@ def save_images(object_file: str) -> None:
         # Loop through different camera positions
         for i in range(len(azimuth_angles)):
             # set the camera position
-            theta = math.radians(azimuth_angles[i]+270)
+            theta = math.radians(azimuth_angles[i]+180)
             phi = math.radians(-1*zenith_angles[i]+90)
             point = (
                 args.camera_dist * math.sin(phi) * math.cos(theta),
