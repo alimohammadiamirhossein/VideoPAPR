@@ -10,3 +10,5 @@ phase2/*.mp4
 phase2/*.tar.gz
 phase2/*.ckpt
 !vgg.pth
+*.mp4
+.idea/
