@@ -27,8 +27,8 @@ from dataset.dataset import RINDataset
 from dataset.utils import get_rays
 from torchvision import transforms
 
-#DEVICE = 'cpu'
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 class DictAsMember(dict):
     def __getattr__(self, name):
@@ -37,6 +37,15 @@ class DictAsMember(dict):
             value = DictAsMember(value)
         return value
 
+def gradient_x(img: torch.Tensor) -> torch.Tensor:
+    return img[:, :-1] - img[:, 1:]
+
+def gradient_y(img: torch.Tensor) -> torch.Tensor:
+    return img[:-1, :] - img[1:, :]
+
+def depth_smooth_loss(depth):
+    grad_x, grad_y = gradient_x(depth), gradient_y(depth)
+    return (grad_x.abs().mean() + grad_y.abs().mean()) / 2.
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -173,61 +182,12 @@ def eval_step(steps, model, device, dataset, eval_dataset, batch, loss_fn, train
     torch.save(torch.tensor(eval_psnrs), os.path.join(log_dir, "eval_psnrs.pth"))
 
     return 0
+from dataset.utils import extract_patches
+from einops import rearrange
+from models.sjc.pose import PoseConfig, camera_pose, sample_near_eye
 
-from pathlib import Path
-import json
-import numpy as np
-import imageio
-import os
-import cv2
 
-def blend_rgba(img):
-    img = img[..., :3] * img[..., -1:] + (1. - img[..., -1:])  # blend A to RGB
-    return img
-
-def load_blender(split, scene="lego", half_res=False, path="data/nerf_synthetic"):
-    assert split in ("train", "val", "test")
-
-    root = Path(path) / scene
-
-    with open(root / f'transforms_{split}.json', "r") as f:
-        meta = json.load(f)
-
-    imgs, poses = [], []
-
-    for frame in meta['frames']:
-        file_name = root / f"{frame['file_path']}.png"
-        im = imageio.imread(file_name)
-        im = cv2.resize(im, (800, 800), interpolation = cv2.INTER_CUBIC)
-
-        c2w = frame['transform_matrix']
-
-        imgs.append(im)
-        poses.append(c2w)
-
-    imgs = (np.array(imgs) / 255.).astype(np.float32)  # (RGBA) imgs
-    mask = imgs[:, :, :, -1]
-    imgs = blend_rgba(imgs)
-    poses = np.array(poses).astype(np.float32)
-
-    H, W = imgs[0].shape[:2]
-    camera_angle_x = float(meta['camera_angle_x'])
-    f = 1 / np.tan(camera_angle_x / 2) * (W / 2)
-
-    if half_res:
-        raise NotImplementedError()
-
-    K = np.array([
-        [f, 0, -(W/2 - 0.5)],
-        [0, -f, -(H/2 - 0.5)],
-        [0, 0, -1]
-    ])  # note OpenGL -ve z convention;
-
-    fov = meta['camera_angle_x']
-
-    return imgs, K, poses, mask, fov
-
-def backward_sjc_loss(
+def backward_sjc__near_loss(
         sd_model: StableDiffusion,
         papr_model: PAPR,
         poser: Poser,
@@ -237,26 +197,38 @@ def backward_sjc_loss(
         step,
         img_idx,
         var_red: bool=True,
-        n_steps:    int = 10000,):
+        n_steps:    int = 10000,
+        args=None):
 
-    # load nerf view
-    images_, _, poses_, mask_, fov_x = load_blender('train', scene=scene, path=nerf_path)
-    # K_ = poser.get_K(H, W, fov_x * 180. / math.pi)
-    K_ = poser.K
-    input_image, input_K, input_pose, input_mask = images_[index], K_, poses_[index], mask_[index]
+    Ks, poses, prompt_prefixes = poser.sample_train(n_steps)
+
+    target_pose = torch.Tensor(poses[step])
+
+    rays_o, rays_d = get_rays(input_image.shape[1], input_image.shape[2], dataset.focal_x, dataset.focal_y, target_pose.unsqueeze(0))
+
+    input_pose = input_pose.cpu().numpy()
+
+
+
+    input_im = input_image.cpu().numpy()
+    
     input_pose[:3, -1] = input_pose[:3, -1] / np.linalg.norm(input_pose[:3, -1]) * poser.R
-    background_mask, image_mask = input_mask == 0., input_mask != 0.
-    input_image = cv2.resize(input_image, dsize=(256, 256), interpolation=cv2.INTER_CUBIC)
-    image_mask = cv2.resize(image_mask.astype(np.float32), dsize=(256, 256), interpolation=cv2.INTER_NEAREST).astype(bool)
-    background_mask = cv2.resize(background_mask.astype(np.float32), dsize=(H, W), interpolation=cv2.INTER_NEAREST).astype(bool)
+    
+    tforms1 = transforms.Compose([transforms.Resize(32), transforms.CenterCrop((32, 32))])
 
-    # to torch tensor
-    input_image = torch.as_tensor(input_image, dtype=float, device=device_glb)
-    input_image = input_image.permute(2, 0, 1)[None, :, :]
-    input_image = input_image * 2. - 1.
-    image_mask = torch.as_tensor(image_mask, dtype=bool, device=device_glb)
-    image_mask = image_mask[None, None, :, :].repeat(1, 3, 1, 1)
-    background_mask = torch.as_tensor(background_mask, dtype=bool, device=device_glb)
+
+    # Step 2: Reshape (if necessary) and select the first image in the batch
+    # Convert from (batch, channels, height, width) to (height, width, channels)
+    input_im = input_im[0]
+
+    input_im = cv2.resize(input_im, dsize=(256, 256), interpolation=cv2.INTER_CUBIC)
+
+
+    input_im = torch.as_tensor(input_im, dtype=float, device=DEVICE)
+    input_im = input_im.permute(2, 0, 1)[None, :, :]
+    input_im = input_im * 2. - 1.
+
+
     with torch.no_grad():
 
             tforms = transforms.Compose([
@@ -264,38 +236,40 @@ def backward_sjc_loss(
                 transforms.CenterCrop((256, 256))
             ])
 
-            input_im = tforms(input_image)
-            print('input_im after transformation: ', input_im.shape, flush=True)
+            input_im = tforms(input_im)
+            #print('input_im after transformation: ', input_im.shape, flush=True)
             #input_im = input_im.squeeze(0)
-            print('input_im after unsqueeze: ', input_im.shape, flush=True)
+            #print('input_im after unsqueeze: ', input_im.shape, flush=True)
             # get input embedding
             sd_model.clip_emb = sd_model.model.get_learned_conditioning(input_im.float()).tile(1,1,1).detach()
             sd_model.vae_emb = sd_model.model.encode_first_stage(input_im.float()).mode().detach()
 
-    Ks, poses, prompt_prefixes = poser.sample_train(n_steps)
-
-    target_pose = torch.Tensor(poses[step])
     # target_pose = np.expand_dims(target_pose, axis=0)
     # print('pose: ', target_pose)
-
-    rays_o, rays_d = get_rays(dataset.H, dataset.W, dataset.focal_x, dataset.focal_y, target_pose.unsqueeze(0))
-    print('rays are generated')
+    
+    
+    #print('rays are generated')
     
     T_target = target_pose[:3, -1]
-    T_cond = input_pose[:3, -1].to(DEVICE).numpy()
+    T_cond = input_pose[:3, -1]
     T = get_T(T_target, T_cond)
     T = T.to(DEVICE)
 
-    print('T.shape: ', T.shape)
-    print('T is generated')
+    # print('T.shape: ', T.shape)
+    # print('T is generated')
     
     bs = 1
     ts = sd_model.us[30:-10]
 
-    print('ts is generated')
+    #print('ts is generated')
 
     papr_rgb_out = papr_model(rays_o.to(DEVICE), rays_d.to(DEVICE), target_pose.to(DEVICE), step)
-    print('PAPR output is generated in SJC')
+    papr_rgb_out = tforms1(rearrange(papr_rgb_out, "1 h w c -> 1 c h w"))
+    #print('papr_rgb_out.shapp#: ', papr_rgb_out.shape)
+    papr_rgb_out = torch.cat((papr_rgb_out, torch.zeros((1, 1, 32, 32), requires_grad=True).to(DEVICE)), dim=1)
+    #print('papr_rgb_out.shap: ######## ', papr_rgb_out.shape)
+    #print('PAPR output is generated in SJC')
+    # papr_rgb_out = torch.zeros((1, 4, 32, 32))
 
     with torch.no_grad():
         chosen_σs = np.random.choice(ts, bs, replace=False)
@@ -311,8 +285,8 @@ def backward_sjc_loss(
         # TODO what should we do about T and different angels? rayd, rayo should be calculated from pose and veiwpoint 
         score_conds = sd_model.img_emb(input_im, conditioning_key='hybrid', T=T)
 
-        print('zs.shape: ', zs.shape)
-        print('chosen_σs.shape: ', chosen_σs.shape)
+        # print('zs.shape: ', zs.shape)
+        # print('chosen_σs.shape: ', chosen_σs.shape)
 
         Ds = sd_model.denoise_objaverse(zs, chosen_σs, score_conds)
 
@@ -323,47 +297,38 @@ def backward_sjc_loss(
         
         grad = grad.mean(0, keepdim=True)
     
-    print('SJC loss is ready')
+    # print('SJC loss is ready')
     
     papr_rgb_out.backward(-grad, retain_graph=True)
 
-    print('SJC loss is backwarded')
+        # print('SJC loss is backwarded')
 
-def gradient_x(img: torch.Tensor) -> torch.Tensor:
-    return img[:, :-1] - img[:, 1:]
+    near_loss = backward_near_loss(step, rays_d.to(DEVICE), rays_o.to(DEVICE), papr_model, target_pose, poser)
 
-def gradient_y(img: torch.Tensor) -> torch.Tensor:
-    return img[:-1, :] - img[1:, :]
+    return near_loss
 
-def depth_smooth_loss(depth):
-    grad_x, grad_y = gradient_x(depth), gradient_y(depth)
-    return (grad_x.abs().mean() + grad_y.abs().mean()) / 2.
+def backward_near_loss(step, rayd, rayo, papr_model, target_pose, poser):
+    near_view_weight = 1e5
+    depth, rgb = get_depth(step, rayd, rayo, papr_model, target_pose)
+    # print('1st depth')
+    
+    eye = target_pose[:3, -1].cpu().detach().numpy()
+    near_eye = sample_near_eye(eye)
+    # print(near_eye)
+    # print(poser.up)
+    near_pose = camera_pose(near_eye, -near_eye, poser.up)
+    near_pose = torch.from_numpy(near_pose).to(DEVICE)
+    depth_near, rgb_near, = get_depth(step, rayd, rayo, papr_model, near_pose)
+    # print('2nd depth')
+    near_loss = ((rgb_near - rgb).abs().mean() + (depth_near - depth).abs().mean()) * near_view_weight
+    near_loss.backward(retain_graph=True)
+    #print(near_loss)
+    return near_loss
 
-def depth_estimation(rayo, rayd, model, N, H, W, attn, selected_points):
-    N, H, W, _ = rayd.shape
-    num_pts, _ = model.points.shape
+    # print('Near loss is backwarded')
 
-    topk = min([num_pts, model.select_k])
 
-    selected_points = torch.zeros(1, H, W, topk, 3)
-    od = -rayo
-    D = torch.sum(od * rayo)
-    dists = torch.abs(torch.sum(selected_points.to(DEVICE) * od, -1) - D) / torch.norm(od)
-    if model.bkg_feats is not None:
-        dists = torch.cat([dists, torch.ones(N, H, W, model.bkg_feats.shape[0]).to(DEVICE) * 0], dim=-1)
-    cur_depth = (torch.sum(attn.squeeze(-1).to(DEVICE) * dists, dim=-1)).detach().cpu()
-    depth = cur_depth.squeeze().numpy().astype(np.float32)
-    return depth
-
-def backward_depth_smooth_loss(rays_o, papr_model, N, H, W, depth_smooth_weight=10000.0):
-    depth_ = depth_estimation(rays_o, papr_model, N, H, W,)
-    input_smooth_loss = depth_smooth_loss(depth_) * depth_smooth_weight * 0.1
-    input_smooth_loss.backward(retain_graph=True)
-
-def backward_near_loss():
-    pass
-
-def train_step(step, model, device, dataset, batch, loss_fn, args, sd_model, papr_model, poser, depth_smooth_loss=False, near_loss=False):
+def train_step(step, papr_model, device, dataset, batch, loss_fn, args, sd_model, poser):
     img_idx, _, tgt, rayd, rayo = batch
     
     # TODO c2w is pose and focals are angels
@@ -375,33 +340,56 @@ def train_step(step, model, device, dataset, batch, loss_fn, args, sd_model, pap
     tgt = tgt.to(DEVICE)
     c2w = c2w.to(DEVICE)
 
-    model.clear_grad()
+    papr_model.clear_grad()
     # TODO
-    print('Calling SJC loss')
-    backward_sjc_loss(sd_model, papr_model, poser, tgt, c2w, dataset, step, img_idx)
-    print('SJC loss is backwarded')
-    
-    if depth_smooth_loss:
-        backward_depth_smooth_loss()
-    
-    if near_loss:
-        backward_near_loss()
 
-    out = model(rayo, rayd, c2w, step)
-    out = model.last_act(out)
+    near_loss = backward_sjc__near_loss(sd_model, papr_model, poser, tgt, c2w, dataset, step, img_idx, args=args)
+
+
+    out = papr_model(rayo, rayd, c2w, step)
+    out = papr_model.last_act(out)
 
     loss = loss_fn(out, tgt)
-    model.scaler.scale(loss).backward()
-    model.step(step)
-    if args.scaler_min_scale > 0 and model.scaler.get_scale() < args.scaler_min_scale:
-        model.scaler.update(args.scaler_min_scale)
+
+    papr_model.scaler.scale(loss).backward()
+    papr_model.step(step)
+    if args.scaler_min_scale > 0 and papr_model.scaler.get_scale() < args.scaler_min_scale:
+        papr_model.scaler.update(args.scaler_min_scale)
     else:
-        model.scaler.update()
+        papr_model.scaler.update()
 
-    return loss.item(), out.detach().cpu().numpy()
+    loss = loss + near_loss
+
+    return loss.detach().item(), near_loss.detach().item(), out.detach().cpu().numpy()
+    
+
+def get_depth(step, rayd, rayo, papr_model, c2w):
+    
+
+    N, H, W, _ = rayd.shape
+    num_pts, _ = papr_model.points.shape
 
 
-def train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args, sd_model, papr_model, poser):
+    topk = min([num_pts, papr_model.select_k])
+
+    feature_map, attn = papr_model.evaluate(rayo.to(DEVICE), rayd.to(DEVICE), c2w.to(DEVICE), step=step)
+    
+    rgb = papr_model(rayo.to(DEVICE), rayd.to(DEVICE), c2w.to(DEVICE), step)
+
+    selected_points = papr_model.selected_points
+
+    od = -rayo
+    D = torch.sum(od * rayo)
+    dists = torch.abs(torch.sum(selected_points.to(DEVICE) * od, -1) - D) / torch.norm(od)
+    if papr_model.bkg_feats is not None:
+        dists = torch.cat([dists, torch.ones(N, H, W, papr_model.bkg_feats.shape[0]).to(DEVICE) * 0], dim=-1)
+    cur_depth = (torch.sum(attn.squeeze(-1).to(DEVICE) * dists, dim=-1)).detach().cpu()
+    depth = cur_depth.squeeze()
+    
+    return depth, rgb
+    
+
+def train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args, sd_model, poser):
 
     trainloader = get_loader(dataset, args.dataset, mode="train")
 
@@ -418,6 +406,7 @@ def train_and_eval(start_step, model, device, dataset, eval_dataset, losses, arg
     tx_lrs = []
 
     avg_train_loss = 0.
+    avg_near_loss = 0.
     step = start_step
     eval_step_cnt = start_step
     pruned = False
@@ -472,14 +461,15 @@ def train_and_eval(start_step, model, device, dataset, eval_dataset, losses, arg
                     model.added_points = True
                     print("Step %d: Added %d points" % (step, num_added))
 
-            loss, out = train_step(step, model, DEVICE, dataset, batch, loss_fn, args, sd_model, papr_model, poser)
+            loss, near_loss, out = train_step(step, model, DEVICE, dataset, batch, loss_fn, args, sd_model, poser)
+            torch.cuda.empty_cache()
             avg_train_loss += loss
             step += 1
             eval_step_cnt += 1
             
             if step % 200 == 0:
                 time_used = time.time() - start_time
-                print("Train step:", step, "loss:", loss, "tx_lr:", model.tx_lr, "pts_lr:", model.pts_lr, "scale:", model.scaler.get_scale(), f"time: {time_used:.2f}s")
+                print("Train step:", step, "loss:", loss, "near_loss:", near_loss, "tx_lr:", model.tx_lr, "pts_lr:", model.pts_lr, "scale:", model.scaler.get_scale(), f"time: {time_used:.2f}s")
                 start_time = time.time()
 
             if (step % args.eval.step == 0) or (step % 500 == 0 and step < 10000):
@@ -527,7 +517,7 @@ def main(args, eval_args, resume):
 
     model = get_model(args, DEVICE)
 
-    sd_model = SD(variant="objaverse", scale=100.0)
+    sd_model = SD(variant="objaverse", scale=100.0, precision='full')
     sd_model = sd_model.make()
     print('SD is loaded')
     poser = PoseConfig(rend_hw=32, FoV=49.1, R=2.0)
@@ -561,7 +551,7 @@ def main(args, eval_args, resume):
                 model.load_my_state_dict(state_dict)
         print("!!!!! Loaded model from %s at step %s" % (args.load_path, resume_step))
 
-    train_and_eval(start_step, model, DEVICE, dataset, eval_dataset, losses, args, sd_model, papr_model=model, poser=poser)
+    train_and_eval(start_step, model, DEVICE, dataset, eval_dataset, losses, args, sd_model, poser=poser)
     
     if DEVICE == 'cuda':
         print(torch.cuda.memory_summary())
