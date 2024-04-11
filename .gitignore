@@ -1,0 +1,11 @@
+**/__pycache__
+phase3/data
+.vscode/
+phase3/experiments/
+phase3/*.pth
+phase3/*.pt
+phase3/*.out
+phase3/*.mp4
+phase3/*.tar.gz
+phase3/!vgg.pth
+.venv
