@@ -24,7 +24,7 @@ def get_transform_matrix(obj):
 
 # Directory where the JSON files will be saved
 main_directory = (
-    "C:\\Users\\leois\\OneDrive\\Documents\\SFU\\SFUTERM2\\733\\Project\\butterfly"
+    "your\\directory\\here"
 )
 if not os.path.exists(main_directory):
     os.makedirs(main_directory)

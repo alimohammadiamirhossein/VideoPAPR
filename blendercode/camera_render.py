@@ -4,7 +4,7 @@ import os
 # Define the main directory where you want to save the images
 # Make sure to update this path to a directory on your system
 main_directory = (
-    "C:\\Users\\leois\\OneDrive\\Documents\\SFU\\SFUTERM2\\733\\Project\\butterfly"
+    "your\\directory\\here"
 )
 
 
