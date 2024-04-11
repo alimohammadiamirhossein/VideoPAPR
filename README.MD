@@ -17,3 +17,4 @@
 
 - Modify the [PAPR](https://github.com/zvict/papr) framework to share weights across frames and alter the point cloud.
 - Refine the motion aspect by incorporating moving objects from the [Objaverse](https://objaverse.allenai.org/) dataset.
+- For instructions on usage see README.md in phase3 folder, it is recommended to build your own .venv for each phase.
