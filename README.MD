@@ -4,15 +4,15 @@
 
 The Generation of Animated 3D Characters project focuses on the development of advanced techniques for generating animated 3D characters in digital media. This project combines state-of-the-art methods in 3D modeling, animation, and rendering to create lifelike and dynamic characters for various applications in entertainment, gaming, virtual reality, and more.
 
-<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(1).gif" style="width: 200px; height: auto;">
-
-<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(2).gif" style="width: 200px; height: auto;">
-
-<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(3).gif" style="width: 200px; height: auto;">
-
-<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(4).gif" style="width: 200px; height: auto;">
+<p float="left">
+<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(1).gif" style="width: 100px; height: auto;">
+<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(2).gif" style="width: 100px; height: auto;">
+<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(3).gif" style="width: 100px; height: auto;">
+<img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(4).gif" style="width: 100px; height: auto;">
+</p>
 
 ## Method:
+
 
 ### 1. Integration of Zero-1-to-3 and AnimateDiff Models
 
