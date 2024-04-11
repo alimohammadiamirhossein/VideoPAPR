@@ -1,4 +1,10 @@
-
+#SBATCH --mem=32G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=8
+#SBATCH --gres=gpu:v100l:1
+#SBATCH --time=8:30:0
+#SBATCH --mail-user=<youremail@gmail.com>
+#SBATCH --mail-type=ALL
 cd ~/$projects/papr
 module load StdEnv/2020
 module load python/3.9
