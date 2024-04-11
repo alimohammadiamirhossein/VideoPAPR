@@ -1,4 +1,4 @@
-# Project: Generation of Animated 3D Characters
+Generation of Animated 3D Characters
 
 ## Introduction:
 
