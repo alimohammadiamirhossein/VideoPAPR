@@ -269,7 +269,7 @@ eval:
     num_workers: 0
     num_slices: -1
   step: 5000  # evaluate the model every this number of steps
-  img_idx: 50 # index of the image to evaluate
+  img_idx: 25 # index of the image to evaluate
   max_height: 100 # maximum size for each loop when rendering a full image, if the image is too large, it will be rendered in multiple loops due to memory constraints
   max_width: 100
   save_fig: false # save the log images during training

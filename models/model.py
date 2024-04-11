@@ -317,7 +317,7 @@ class PAPR(nn.Module):
 
         dists_to_rays = torch.norm(D, dim=-1, keepdim=True)
         proj_dists = torch.norm(proj, dim=-1, keepdim=True)
-        
+
         return proj_dists, dists_to_rays, proj, D
 
     def _get_points(self, rays_o, rays_d, c2w, step=-1):
@@ -340,7 +340,7 @@ class PAPR(nn.Module):
             select_k_ind = self._calculate_global_distances(rays_o, rays_d, points)   # (N, H, W, num_pts)
         selected_points = points[select_k_ind, :]  # (N, H, W, select_k, 3)
         self.selected_points = selected_points
-        
+
         return selected_points, select_k_ind
 
     def prune_points(self, thresh):
@@ -380,7 +380,7 @@ class PAPR(nn.Module):
 
         if self.use_pc_feats:
             point_features = self.pc_feats.detach().cpu()
-        
+
         new_points, num_new_points, new_influ_scores, new_point_features = add_points_knn(points, self.points_influ_scores.detach().cpu(), add_num=add_num,
                                                                                             k=self.args.geoms.points.add_k, comb_type=self.args.geoms.points.add_type,
                                                                                             sample_k=self.args.geoms.points.add_sample_k, sample_type=self.args.geoms.points.add_sample_type,
@@ -565,7 +565,7 @@ class PAPR(nn.Module):
                   fused_features.max().item(), fused_features.mean().item(), fused_features.std().item())
             print(' predict rgb:', step, rgb.shape, rgb.min().item(),
                   rgb.max().item(), rgb.mean().item(), rgb.std().item())
-            
+
         return rgb
 
     def save(self, step, save_dir):
@@ -589,7 +589,7 @@ class PAPR(nn.Module):
                 schedulers_state_dict[name] = None
         torch.save(schedulers_state_dict, os.path.join(
             save_dir, 'schedulers.pth'))
-        
+
         scaler_state_dict = self.scaler.state_dict()
         torch.save(scaler_state_dict, os.path.join(
             save_dir, 'scaler.pth'))
@@ -632,7 +632,7 @@ class PAPR(nn.Module):
                     print("exclude", name)
                     break
             else:
-                if name not in ['points', 'points_influ_scores', 'pc_feats']:
+                if name not in ["points", "points_influ_scores", "pc_feats"]:
                     if isinstance(param, nn.Parameter):
                         # backwards compatibility for serialized parameters
                         param = param.data
@@ -648,3 +648,7 @@ class PAPR(nn.Module):
                 state_dict['points_influ_scores'].data, requires_grad=self.points_influ_scores.requires_grad)
         self.pc_feats = nn.Parameter(state_dict['pc_feats'].data, requires_grad=self.pc_feats.requires_grad)
         print("load pc_feats", self.pc_feats.shape, self.pc_feats.min(), self.pc_feats.max())
+
+    def freeze_renderer(self):
+        for params in self.renderer.parameters():
+            params.requires_grad = False

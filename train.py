@@ -38,6 +38,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="PAPR")
     parser.add_argument('--opt', type=str, default="", help='Option file path')
     parser.add_argument('--resume', type=int, default=0, help='Resume training')
+    parser.add_argument('--outframe', type=str, default=None, help='Current frame in Video')
     return parser.parse_args()
 
 
@@ -305,12 +306,14 @@ def train_and_eval(start_step, model, device, dataset, eval_dataset, losses, arg
 
     print("Training finished!")
 
-            
-def main(args, eval_args, resume):
+def main(args, eval_args, resume, outframe):
     log_dir = os.path.join(args.save_dir, args.index)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = get_model(args, device)
+    if outframe:
+        model.freeze_renderer()
+
     dataset = get_dataset(args.dataset, mode="train")
     eval_dataset = get_dataset(eval_args.dataset, mode="test")
     model = model.to(device)
@@ -343,8 +346,16 @@ def main(args, eval_args, resume):
 if __name__ == '__main__':
 
     args = parse_args()
+    outframe_entry = False
     with open(args.opt, 'r') as f:
         config = yaml.safe_load(f)
+        # Check if --outframe is provided
+        if args.outframe:
+            outframe = args.outframe.zfill(3)
+            config['dataset']['path'] += f"frame_{outframe}/"
+            outframe_entry = True
+            
+
     eval_config = copy.deepcopy(config)
     eval_config['dataset'].update(eval_config['eval']['dataset'])
     eval_config = DictAsMember(eval_config)
@@ -363,4 +374,5 @@ if __name__ == '__main__':
 
     setup_seed(config.seed)
 
-    main(config, eval_config, args.resume)
+    main(config, eval_config, args.resume, outframe_entry)
+

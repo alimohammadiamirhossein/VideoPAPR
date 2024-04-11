@@ -5,8 +5,10 @@ from PIL import Image
 import json
 
 
-def load_blender_frame_data(basedir, frame_i, factor=1, read_offline=True):
-    with open(os.path.join(basedir, f"frame_{frame_i}.json"), "r") as fp:
+def load_blender_frame_data(
+    basedir, frame_i, split="train", factor=1, read_offline=True
+):
+    with open(os.path.join(basedir, f"frame_{frame_i}_{split}.json"), "r") as fp:
         meta = json.load(fp)
 
     poses = []
@@ -39,3 +41,5 @@ def load_blender_frame_data(basedir, frame_i, factor=1, read_offline=True):
     focal = 0.5 * W / np.tan(0.5 * camera_angle_x)
 
     return images, poses, [H, W, focal], image_paths
+
+# a = load_blender_frame_data("C:\\Users\\leois\\OneDrive\\Documents\\SFU\SFUTERM2\\733\\VideoPapr\\data\\butterfly\\frame_000","000")
