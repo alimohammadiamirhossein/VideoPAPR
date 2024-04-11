@@ -305,7 +305,7 @@ def backward_sjc__near_loss(
 
 
     # depth smoothness loss
-    in_depth, _ = get_depth(step, rays_d.to(DEVICE), rays_o.to(DEVICE), papr_model, input_pose)
+    in_depth, _ = get_depth(step, rays_d.to(DEVICE), rays_o.to(DEVICE), papr_model, torch.from_numpy(input_pose).to(DEVICE))
     input_smooth_loss = depth_smooth_loss(in_depth) * depth_smooth_weight * 0.1
     input_smooth_loss.backward(retain_graph=True)
 
@@ -393,7 +393,7 @@ def get_depth(step, rayd, rayo, papr_model, c2w):
     dists = torch.abs(torch.sum(selected_points.to(DEVICE) * od, -1) - D) / torch.norm(od)
     if papr_model.bkg_feats is not None:
         dists = torch.cat([dists, torch.ones(N, H, W, papr_model.bkg_feats.shape[0]).to(DEVICE) * 0], dim=-1)
-    cur_depth = (torch.sum(attn.squeeze(-1).to(DEVICE) * dists, dim=-1)).detach().cpu()
+    cur_depth = (torch.sum(attn.squeeze(-1).to(DEVICE) * dists, dim=-1))
     depth = cur_depth.squeeze()
     
     return depth, rgb
