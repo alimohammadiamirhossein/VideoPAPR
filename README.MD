@@ -12,6 +12,7 @@ The Generation of Animated 3D Characters project focuses on the development of a
 <img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter%20(3).gif" style="width: 300px; height: auto;">
 <img src="https://github.com/alimohammadiamirhossein/VideoPAPR/blob/main/phase1/data/gt_video-ezgif.com-video-to-gif-converter.gif" style="width: 300px; height: auto;">
 </p>
+
 ## Method:
 
 
