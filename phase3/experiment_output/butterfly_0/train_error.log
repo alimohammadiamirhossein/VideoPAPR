@@ -1,0 +1,122 @@
+**************************************************
+2024-04-10 17:50:37.460845
+**************************************************
+Traceback (most recent call last):
+  File "/project/6054857/kla280/papr/train.py", line 366, in <module>
+    main(config, eval_config, args.resume)
+  File "/project/6054857/kla280/papr/train.py", line 339, in main
+    train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args)
+  File "/project/6054857/kla280/papr/train.py", line 274, in train_and_eval
+    eval_step(steps, model, device, dataset, eval_dataset, batch, loss_fn, out, args, train_losses, eval_losses, eval_psnrs, pt_lrs, tx_lrs)
+  File "/project/6054857/kla280/papr/train.py", line 48, in eval_step
+    img, rayd, rayo = eval_dataset.get_full_img(args.eval.img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 119, in get_full_img
+    image, rayo, rayd = self._read_image_from_path(img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 52, in _read_image_from_path
+    image_path = self.image_paths[image_idx]
+IndexError: list index out of range
+**************************************************
+2024-04-10 18:36:12.628615
+**************************************************
+Traceback (most recent call last):
+  File "/project/6054857/kla280/papr/train.py", line 366, in <module>
+    main(config, eval_config, args.resume)
+  File "/project/6054857/kla280/papr/train.py", line 339, in main
+    train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args)
+  File "/project/6054857/kla280/papr/train.py", line 274, in train_and_eval
+    eval_step(steps, model, device, dataset, eval_dataset, batch, loss_fn, out, args, train_losses, eval_losses, eval_psnrs, pt_lrs, tx_lrs)
+  File "/project/6054857/kla280/papr/train.py", line 48, in eval_step
+    img, rayd, rayo = eval_dataset.get_full_img(args.eval.img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 119, in get_full_img
+    image, rayo, rayd = self._read_image_from_path(img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 52, in _read_image_from_path
+    image_path = self.image_paths[image_idx]
+IndexError: list index out of range
+**************************************************
+2024-04-10 18:57:51.399356
+**************************************************
+Traceback (most recent call last):
+  File "/project/6054857/kla280/papr/train.py", line 366, in <module>
+    main(config, eval_config, args.resume)
+  File "/project/6054857/kla280/papr/train.py", line 339, in main
+    train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args)
+  File "/project/6054857/kla280/papr/train.py", line 213, in train_and_eval
+    for _, batch in enumerate(trainloader):
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 628, in __next__
+    data = self._next_data()
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 671, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 100, in __getitem__
+    image, rayo, rayd = self._read_image_from_path(img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 52, in _read_image_from_path
+    if image_idx > len(image_path)-1:
+UnboundLocalError: local variable 'image_path' referenced before assignment
+**************************************************
+2024-04-10 23:17:56.060017
+**************************************************
+Traceback (most recent call last):
+  File "/project/6054857/kla280/papr/train.py", line 366, in <module>
+    main(config, eval_config, args.resume)
+  File "/project/6054857/kla280/papr/train.py", line 339, in main
+    train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args)
+  File "/project/6054857/kla280/papr/train.py", line 213, in train_and_eval
+    for _, batch in enumerate(trainloader):
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 628, in __next__
+    data = self._next_data()
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 671, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 100, in __getitem__
+    image, rayo, rayd = self._read_image_from_path(img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 52, in _read_image_from_path
+    if image_idx > len(self.image_path)-1:
+AttributeError: 'RINDataset' object has no attribute 'image_path'
+**************************************************
+2024-04-11 00:06:11.868682
+**************************************************
+/project/6054857/kla280/papr/logger.py:44: RuntimeWarning: invalid value encountered in divide
+  weights = (weights - weights.min()) / (weights.max() - weights.min())
+/project/6054857/kla280/papr/logger.py:232: UserWarning: The figure layout has changed to tight
+  fig.tight_layout()
+Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
+/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/optim/lr_scheduler.py:163: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/optim/lr_scheduler.py:138: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn("Detected call of `lr_scheduler.step()` before `optimizer.step()`. "
+Traceback (most recent call last):
+  File "/project/6054857/kla280/papr/train.py", line 366, in <module>
+    main(config, eval_config, args.resume)
+  File "/project/6054857/kla280/papr/train.py", line 339, in main
+    train_and_eval(start_step, model, device, dataset, eval_dataset, losses, args)
+  File "/project/6054857/kla280/papr/train.py", line 213, in train_and_eval
+    for _, batch in enumerate(trainloader):
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 628, in __next__
+    data = self._next_data()
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 671, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 58, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 100, in __getitem__
+    image, rayo, rayd = self._read_image_from_path(img_idx)
+  File "/project/6054857/kla280/papr/dataset/dataset.py", line 56, in _read_image_from_path
+    image = imageio.imread(image_path)
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/imageio/__init__.py", line 97, in imread
+    return imread_v2(uri, format=format, **kwargs)
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/imageio/v2.py", line 359, in imread
+    with imopen(uri, "ri", **imopen_args) as file:
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/imageio/core/imopen.py", line 113, in imopen
+    request = Request(uri, io_mode, format_hint=format_hint, extension=extension)
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/imageio/core/request.py", line 247, in __init__
+    self._parse_uri(uri)
+  File "/project/6054857/kla280/papr/.venv/lib/python3.9/site-packages/imageio/core/request.py", line 407, in _parse_uri
+    raise FileNotFoundError("No such file: '%s'" % fn)
+FileNotFoundError: No such file: '/project/6054857/kla280/papr/data/butterfly/frame_000/train/Camera_00_frame_000.png'
